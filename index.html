@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gran Rifa - Aparta tu número</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f3f4f6; margin: 0; padding: 12px; color: #1f2937; }
+    .container { max-width: 450px; margin: 0 auto; background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    h1 { text-align: center; font-size: 1.4rem; margin-bottom: 4px; color: #111827; }
+    p.sub { text-align: center; color: #4b5563; font-size: 0.85rem; margin-top: 0; margin-bottom: 16px; }
+    .info-pago { background: #eff6ff; border: 1px: #bfdbfe; padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 16px; }
+    .num-btn { padding: 10px 0; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
+    .num-btn.ocupado { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; text-decoration: line-through; cursor: not-allowed; }
+    .num-btn.seleccionado { background: #10b981; border-color: #059669; color: #fff; transform: scale(1.03); }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
+    input[type="text"], input[type="tel"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 0.95rem; }
+    button[type="submit"] { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; }
+    button[type="submit"]:disabled { background: #9ca3af; cursor: not-allowed; }
+    .status { text-align: center; margin-top: 10px; font-weight: 600; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🎟️ Gran Rifa Solidaria</h1>
+  <p class="sub">Toca un número libre, completa tus datos y sube tu comprobante.</p>
+
+  <div class="info-pago">
+    <strong>📱 Datos de Pago Móvil:</strong><br>
+    Banco: 0102 (Venezuela) | CI: V-XXXXXXXX<br>
+    Teléfono: 0412-1234567 | Monto: $X o su eq. en Bs.
+  </div>
+
+  <div id="grid" class="grid">Cargando números...</div>
+
+  <form id="rifaForm">
+    <div class="form-group">
+      <label>Número seleccionado:</label>
+      <input type="text" id="numeroSeleccionado" readonly placeholder="Toca un número arriba" required>
+    </div>
+    <div class="form-group">
+      <label>Nombre y Apellido:</label>
+      <input type="text" id="nombre" placeholder="Ej. Carlos Pérez" required>
+    </div>
+    <div class="form-group">
+      <label>Teléfono (WhatsApp):</label>
+      <input type="tel" id="telefono" placeholder="Ej. 04121234567" required>
+    </div>
+    <div class="form-group">
+      <label>Comprobante de pago (Captura):</label>
+      <input type="file" id="comprobante" accept="image/*" required>
+    </div>
+    <button type="submit" id="btnEnviar">Apartar Número</button>
+    <div id="statusMsg" class="status"></div>
+  </form>
+</div>
+
+<script>
+  const API_URL = "https://sheetdb.io/api/v1/jcei39pmynbh5";
+  const TOTAL_NUMEROS = 50; // Puedes cambiarlo a 100 si prefieres del 00 al 99
+  let numerosOcupados = [];
+  let seleccionado = null;
+
+  async function cargarNumeros() {
+    const grid = document.getElementById("grid");
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      // Extrae los números que ya estén registrados en la hoja
+      numerosOcupados = data.map(row => String(row.Numero).trim());
+    } catch (e) {
+      console.error("Error al cargar ocupados:", e);
+    }
+
+    grid.innerHTML = "";
+    for (let i = 1; i <= TOTAL_NUMEROS; i++) {
+      const numStr = String(i).padStart(2, '0');
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = numStr;
+      btn.className = "num-btn";
+
+      if (numerosOcupados.includes(numStr)) {
+        btn.classList.add("ocupado");
+        btn.disabled = true;
+      } else {
+        btn.onclick = () => seleccionarNumero(numStr, btn);
+      }
+      grid.appendChild(btn);
+    }
+  }
+
+  function seleccionarNumero(numStr, btnElement) {
+    document.querySelectorAll(".num-btn").forEach(b => b.classList.remove("seleccionado"));
+    btnElement.classList.add("seleccionado");
+    seleccionado = numStr;
+    document.getElementById("numeroSeleccionado").value = numStr;
+  }
+
+  // Sube la imagen a un servidor público temporal gratuito para obtener el link que se guarda en Sheets
+  async function subirImagenImgBB(file) {
+    const formData = new FormData();
+    formData.append("image", file);
+    // Usamos una API key pública temporal de prueba para ImgBB
+    const res = await fetch("https://api.imgbb.com/1/upload?key=6d203673c70ab92ba89657cc43cf9d98", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      return data.url;
+    } else {
+      throw new Error("No se pudo subir la imagen del comprobante.");
+    }
+  }
+
+  document.getElementById("rifaForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!seleccionado) return alert("Por favor selecciona un número de la cuadrícula.");
+
+    const btn = document.getElementById("btnEnviar");
+    const status = document.getElementById("statusMsg");
+    const fileInput = document.getElementById("comprobante");
+
+    btn.disabled = true;
+    btn.textContent = "Subiendo comprobante...";
+    status.textContent = "Procesando registro...";
+
+    try {
+      // 1. Subir la foto del comprobante
+      status.textContent = "Subiendo foto...";
+      const imageUrl = await subirImagenImgBB(fileInput.files[0]);
+
+      // 2. Guardar datos en SheetDB
+      status.textContent = "Guardando en la hoja...";
+      const nuevoRegistro = {
+        data: [{
+          Fecha: new Date().toLocaleString(),
+          Numero: seleccionado,
+          Nombre: document.getElementById("nombre").value.trim(),
+          Telefono: document.getElementById("telefono").value.trim(),
+          Comprobante: imageUrl
+        }]
+      };
+
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nuevoRegistro)
+      });
+
+      if (res.ok) {
+        status.style.color = "#059669";
+        status.textContent = `¡Éxito! Número ${seleccionado} apartado correctamente.`;
+        document.getElementById("rifaForm").reset();
+        seleccionado = null;
+        await cargarNumeros(); // Recarga la cuadrícula para bloquear el número de inmediato
+      } else {
+        throw new Error("Error al guardar en la base de datos.");
+      }
+    } catch (err) {
+      status.style.color = "#dc2626";
+      status.textContent = err.message || "Ocurrió un error. Intenta nuevamente.";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Apartar Número";
+    }
+  });
+
+  cargarNumeros();
+</script>
+</body>
+</html>
