@@ -1,15 +1,16 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gran Rifa - Aparta tu número</title>
+  <title>Gran Rifa Licuadora Dorada</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #f3f4f6; margin: 0; padding: 12px; color: #1f2937; }
     .container { max-width: 450px; margin: 0 auto; background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     h1 { text-align: center; font-size: 1.4rem; margin-bottom: 4px; color: #111827; }
     p.sub { text-align: center; color: #4b5563; font-size: 0.85rem; margin-top: 0; margin-bottom: 16px; }
-    .info-pago { background: #eff6ff; border: 1px: #bfdbfe; padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; }
+    .info-pago { background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; position: relative; }
+    .btn-copiar { margin-top: 8px; width: 100%; background: #1d4ed8; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer; }
     .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 16px; }
     .num-btn { padding: 10px 0; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
     .num-btn.ocupado { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; text-decoration: line-through; cursor: not-allowed; }
@@ -17,6 +18,7 @@
     .form-group { margin-bottom: 12px; }
     label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 0.85rem; }
     input[type="text"], input[type="tel"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 0.95rem; }
+    .monto-box { background: #fef08a; padding: 8px; border-radius: 6px; font-weight: bold; text-align: center; margin-bottom: 12px; font-size: 0.95rem; color: #854d0e; }
     button[type="submit"] { width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; }
     button[type="submit"]:disabled { background: #9ca3af; cursor: not-allowed; }
     .status { text-align: center; margin-top: 10px; font-weight: 600; font-size: 0.9rem; }
@@ -25,22 +27,28 @@
 <body>
 
 <div class="container">
-  <h1>🎟️ Gran Rifa Solidaria</h1>
-  <p class="sub">Toca un número libre, completa tus datos y sube tu comprobante.</p>
+  <h1>🏆 Gran Rifa Licuadora Dorada</h1>
+  <p class="sub">Selecciona tus números, completa tus datos y sube tu comprobante.</p>
 
-  <div class="info-pago">
+  <div class="info-pago" id="datosPago">
     <strong>📱 Datos de Pago Móvil:</strong><br>
-    Banco: 0102 (Venezuela) | CI: V-XXXXXXXX<br>
-    Teléfono: 0412-1234567 | Monto: $X o su eq. en Bs.
+    Banco: 0102 (Venezuela)<br>
+    CI: V-XXXXXXXX<br>
+    Teléfono: 0412-1234567<br>
+    Valor por número: <strong>800 Bs</strong>
+    <button type="button" class="btn-copiar" onclick="copiarDatos()">📋 Copiar datos de pago</button>
   </div>
 
   <div id="grid" class="grid">Cargando números...</div>
 
   <form id="rifaForm">
     <div class="form-group">
-      <label>Número seleccionado:</label>
-      <input type="text" id="numeroSeleccionado" readonly placeholder="Toca un número arriba" required>
+      <label>Números seleccionados:</label>
+      <input type="text" id="numerosSeleccionados" readonly placeholder="Toca uno o varios números arriba" required>
     </div>
+    
+    <div class="monto-box" id="montoTotal">Total a pagar: 0 Bs</div>
+
     <div class="form-group">
       <label>Nombre y Apellido:</label>
       <input type="text" id="nombre" placeholder="Ej. Carlos Pérez" required>
@@ -53,24 +61,38 @@
       <label>Comprobante de pago (Captura):</label>
       <input type="file" id="comprobante" accept="image/*" required>
     </div>
-    <button type="submit" id="btnEnviar">Apartar Número</button>
+    <button type="submit" id="btnEnviar">Apartar Números</button>
     <div id="statusMsg" class="status"></div>
   </form>
 </div>
 
 <script>
   const API_URL = "https://sheetdb.io/api/v1/jcei39pmynbh5";
-  const TOTAL_NUMEROS = 50; // Puedes cambiarlo a 100 si prefieres del 00 al 99
+  const TOTAL_NUMEROS = 50; 
+  const PRECIO_CADA_UNO = 800;
   let numerosOcupados = [];
-  let seleccionado = null;
+  let seleccionados = [];
+
+  function copiarDatos() {
+    const texto = "Banco: 0102\nCI: V-XXXXXXXX\nTeléfono: 0412-1234567\nValor por número: 800 Bs";
+    navigator.clipboard.writeText(texto).then(() => {
+      alert("¡Datos de pago copiados al portapapeles!");
+    });
+  }
 
   async function cargarNumeros() {
     const grid = document.getElementById("grid");
     try {
       const res = await fetch(API_URL);
       const data = await res.json();
-      // Extrae los números que ya estén registrados en la hoja
-      numerosOcupados = data.map(row => String(row.Numero).trim());
+      // Soporta si en la hoja se guardaron separados por comas o individuales
+      numerosOcupados = [];
+      data.forEach(row => {
+        if(row.Numero) {
+          const nums = String(row.Numero).split(',');
+          nums.forEach(n => numerosOcupados.push(n.trim()));
+        }
+      });
     } catch (e) {
       console.error("Error al cargar ocupados:", e);
     }
@@ -87,59 +109,66 @@
         btn.classList.add("ocupado");
         btn.disabled = true;
       } else {
-        btn.onclick = () => seleccionarNumero(numStr, btn);
+        if (seleccionados.includes(numStr)) {
+          btn.classList.add("seleccionado");
+        }
+        btn.onclick = () => alternarNumero(numStr, btn);
       }
       grid.appendChild(btn);
     }
   }
 
-  function seleccionarNumero(numStr, btnElement) {
-    document.querySelectorAll(".num-btn").forEach(b => b.classList.remove("seleccionado"));
-    btnElement.classList.add("seleccionado");
-    seleccionado = numStr;
-    document.getElementById("numeroSeleccionado").value = numStr;
-  }
-
-  // Sube la imagen a un servidor público temporal gratuito para obtener el link que se guarda en Sheets
-  async function subirImagenImgBB(file) {
-    const formData = new FormData();
-    formData.append("image", file);
-    // Usamos una API key pública temporal de prueba para ImgBB
-    const res = await fetch("https://api.imgbb.com/1/upload?key=6d203673c70ab92ba89657cc43cf9d98", {
-      method: "POST",
-      body: formData
-    });
-    const data = await res.json();
-    if (data.success) {
-      return data.url;
+  function alternarNumero(numStr, btnElement) {
+    const index = seleccionados.indexOf(numStr);
+    if (index > -1) {
+      seleccionados.splice(index, 1);
+      btnElement.classList.remove("seleccionado");
     } else {
-      throw new Error("No se pudo subir la imagen del comprobante.");
+      seleccionados.push(numStr);
+      btnElement.classList.add("seleccionado");
     }
+    
+    // Ordenar numéricamente
+    seleccionados.sort((a, b) => parseInt(a) - parseInt(b));
+
+    document.getElementById("numerosSeleccionados").value = seleccionados.join(", ");
+    const totalBs = seleccionados.length * PRECIO_CADA_UNO;
+    document.getElementById("montoTotal").textContent = `Total a pagar: ${totalBs} Bs (${seleccionados.length} números)`;
   }
 
   document.getElementById("rifaForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!seleccionado) return alert("Por favor selecciona un número de la cuadrícula.");
+    if (seleccionados.length === 0) return alert("Por favor selecciona al menos un número.");
 
     const btn = document.getElementById("btnEnviar");
     const status = document.getElementById("statusMsg");
     const fileInput = document.getElementById("comprobante");
 
     btn.disabled = true;
-    btn.textContent = "Subiendo comprobante...";
-    status.textContent = "Procesando registro...";
+    btn.textContent = "Subiendo imagen...";
+    status.textContent = "Subiendo comprobante al servidor...";
 
     try {
-      // 1. Subir la foto del comprobante
-      status.textContent = "Subiendo foto...";
-      const imageUrl = await subirImagenImgBB(fileInput.files[0]);
+      // Subir imagen corregido y optimizado para móviles
+      const formData = new FormData();
+      formData.append("image", fileInput.files[0]);
 
-      // 2. Guardar datos en SheetDB
-      status.textContent = "Guardando en la hoja...";
+      const imgRes = await fetch("https://api.imgbb.com/1/upload?key=6d203673c70ab92ba89657cc43cf9d98", {
+        method: "POST",
+        body: formData
+      });
+      const imgData = await imgRes.json();
+      
+      if (!imgData.success) {
+        throw new Error("No se pudo subir la foto. Intenta con una imagen más ligera.");
+      }
+      const imageUrl = imgData.data.url;
+
+      status.textContent = "Guardando registro...";
       const nuevoRegistro = {
         data: [{
           Fecha: new Date().toLocaleString(),
-          Numero: seleccionado,
+          Numero: seleccionados.join(", "),
           Nombre: document.getElementById("nombre").value.trim(),
           Telefono: document.getElementById("telefono").value.trim(),
           Comprobante: imageUrl
@@ -154,19 +183,20 @@
 
       if (res.ok) {
         status.style.color = "#059669";
-        status.textContent = `¡Éxito! Número ${seleccionado} apartado correctamente.`;
+        status.textContent = `¡Éxito! Números (${seleccionados.join(", ")}) apartados correctamente.`;
         document.getElementById("rifaForm").reset();
-        seleccionado = null;
-        await cargarNumeros(); // Recarga la cuadrícula para bloquear el número de inmediato
+        seleccionados = [];
+        document.getElementById("montoTotal").textContent = "Total a pagar: 0 Bs";
+        await cargarNumeros();
       } else {
         throw new Error("Error al guardar en la base de datos.");
       }
     } catch (err) {
       status.style.color = "#dc2626";
-      status.textContent = err.message || "Ocurrió un error. Intenta nuevamente.";
+      status.textContent = err.message || "Ocurrió un error al procesar. Intenta nuevamente.";
     } finally {
       btn.disabled = false;
-      btn.textContent = "Apartar Número";
+      btn.textContent = "Apartar Números";
     }
   });
 
